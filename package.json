@@ -1,0 +1,27 @@
+{
+  "name": "websocket-iot-server",
+  "version": "1.0.0",
+  "description": "Servidor WebSocket para dispositivos IoT com Wemos D1 R2",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "websocket",
+    "iot",
+    "esp8266",
+    "wemos",
+    "nodejs",
+    "express"
+  ],
+  "author": "Seu Nome",
+  "license": "MIT"
+}
