@@ -1,6 +1,12 @@
+const WebSocket = require('ws');
+
 function sendMessage(ws, message) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify(message));
+    } catch (error) {
+      console.error('❌ Erro ao enviar mensagem WebSocket:', error);
+    }
   }
 }
 
@@ -13,14 +19,18 @@ function sendError(ws, error) {
 }
 
 function broadcastToClients(message, connectedDevices, excludeDeviceId = null) {
+  if (!connectedDevices) return;
+  
   connectedDevices.forEach((device, deviceId) => {
-    if (deviceId !== excludeDeviceId) {
+    if (deviceId !== excludeDeviceId && device.ws) {
       sendMessage(device.ws, message);
     }
   });
 }
 
 function broadcastDeviceList(connectedDevices) {
+  if (!connectedDevices) return;
+  
   const deviceList = Array.from(connectedDevices.keys());
   broadcastToClients({
     type: 'device_list_update',

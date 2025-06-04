@@ -1,6 +1,67 @@
 const Device = require('../models/Device');
-const { connectedDevices, sendMessage } = require('./websocketController');
+const { connectedDevices } = require('./websocketController');
 const LedConfig = require('../models/LedConfig');
+const { sendMessage } = require('../utils/websocketUtils');
+
+exports.sendCommand = async (req, res) => {
+  const deviceId = req.params.deviceId;
+  const { command, parameters } = req.body;
+  
+  // Obter a instância atual de connectedDevices
+  const connectedDevices = getConnectedDevices();
+  
+  console.log('Dispositivos conectados:', [...connectedDevices.keys()]);
+
+  try {
+    if (!connectedDevices) {
+      throw new Error('Nenhum dispositivo conectado');
+    }
+
+    const device = connectedDevices.get(deviceId);
+    if (!device) {
+      return res.status(404).json({
+        error: 'Dispositivo não encontrado',
+        connectedDevices: [...connectedDevices.keys()]
+      });
+    }
+
+    if (command === 'led_update') {
+      try {
+        const ledConfig = new LedConfig({
+          deviceId,
+          ...parameters,
+          timestamp: new Date()
+        });
+        await ledConfig.save();
+      } catch (err) {
+        console.error('Erro ao salvar LED:', err);
+      }
+    }
+
+    const commandMessage = {
+      type: 'command',
+      command,
+      parameters: parameters || {},
+      timestamp: new Date().toISOString()
+    };
+
+    sendMessage(device.ws, commandMessage);
+    
+    res.json({
+      status: 'success',
+      deviceId,
+      command
+    });
+
+  } catch (err) {
+    console.error('Erro no sendCommand:', err);
+    res.status(500).json({
+      error: 'Erro ao enviar comando',
+      details: err.message,
+      systemError: err.stack // Apenas para desenvolvimento
+    });
+  }
+};
 
 // Obter todos os dispositivos do banco de dados
 exports.getAllDevices = async (req, res) => {

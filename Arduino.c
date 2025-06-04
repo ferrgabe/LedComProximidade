@@ -1,5 +1,5 @@
 #include <ESP8266WiFi.h>
-#include <WebSocketsClient.h>
+#include <WebSocketsClient.h> // instalar lib WebSockets by Markus Sattler
 #include <ArduinoJson.h>
 
 // Define distance sensor pins
@@ -13,7 +13,7 @@
 
 // Variables
 // Websocket Variables
-const char * websocketServer = "192.168.0.4"; // IP do seu backend
+const char * websocketServer = "192.168.0.1"; // IP do seu backend
 const char * websocketPath = "/ws"; // Caminho do WebSocket no seu backend
 const int websocketPort = 8080;
 const unsigned long heartbeatInterval = 30000; // 30 segundos
@@ -29,6 +29,12 @@ bool blinkActive = false;
 int blinkState = 0;
 unsigned long lastBlinkTime = 0;
 unsigned long blinkInterval = 200;
+
+// Hold variables
+bool holdActive = false;
+bool proxAndHoldActive = false;
+unsigned long lastHoldTime = 0;;
+unsigned long holdInterval = 30000;
 
 // Proximity variables
 bool proximityActive = false;
@@ -77,6 +83,12 @@ void loop() {
     setupWiFi();
   }
 
+  // Handle LED Holding time
+  if (holdActive && millis() - lastHoldTime >= holdInterval) {
+    lastHoldTime = millis();
+    turnOffLights();
+  }
+
   // Handle LED Color Cycling
   if (blinkActive && millis() - lastBlinkTime >= blinkInterval) {
     lastBlinkTime = millis();
@@ -119,6 +131,16 @@ void loop() {
   }
   else if (distance > 30 && proximityActive == true){
     turnOffLights();
+  }
+
+  if (distance <= 100 && proxAndHoldActive == true){
+    digitalWrite(PINO_LED_R, proximityRed ? HIGH : LOW);
+    digitalWrite(PINO_LED_G, proximityGreen ? HIGH : LOW);
+    digitalWrite(PINO_LED_B, proximityBlue ? HIGH : LOW);
+  }
+  else if (distance > 100 && proxAndHoldActive == true && holdActive == true){
+    turnOffLights();
+  
   }
 
   delay(200);
@@ -215,6 +237,7 @@ void turnOffLights() {
 
 void turnOffAllBehaviors() {
   blinkActive = false;
+  holdActive = false
   proximityActive = false;
   turnOffLights();
 }
@@ -230,6 +253,12 @@ void behaviorBlink(bool start) {
   blinkState = 0;
   lastBlinkTime = millis();
 };
+
+void behaviorProxAndHold(bool start, bool red, bool green, bool blue) {
+  holdActive = start;
+  proxAndHoldActive = start;
+  lastHoldTime = millis()
+}
 
 void behaviorProximity(bool start, bool red, bool green, bool blue) {
   proximityActive = start;
@@ -280,6 +309,10 @@ void handleMessage(String message) {
           case 3: //proximity
             behaviorProximity(true, red, green, blue);
             break;
+
+          case 4: //aproxima e segura n segundos.
+            behaviorProxAndHold(true, red, green, blue)
+            break
 
           default:
             turnOffLights();

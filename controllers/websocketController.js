@@ -1,13 +1,15 @@
+const WebSocket = require('ws');
 const Device = require('../models/Device');
 const { handleMessage } = require('../services/deviceService');
 const { broadcastToClients, broadcastDeviceList, sendMessage, sendError } = require('../utils/websocketUtils');
 
-module.exports = function(wss) {
-  const connectedDevices = new Map();
+let connectedDevices = new Map();
 
+function initializeWebSocket(wss) {
   wss.on('connection', async (ws, req) => {
     const clientIP = req.socket.remoteAddress;
-    const deviceId = generateDeviceId();
+    //const deviceId = generateDeviceId();
+    const deviceId = 1;
     
     console.log(`🔌 Nova conexão WebSocket de ${clientIP} - ID: ${deviceId}`);
     
@@ -47,15 +49,21 @@ module.exports = function(wss) {
       deviceInfo.lastHeartbeat = new Date();
     });
     
-    ws.on('message', async (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        await handleMessage(deviceId, message, ws, connectedDevices);
-      } catch (error) {
-        console.error(`❌ Erro ao processar mensagem de ${deviceId}:`, error);
-        sendError(ws, 'Invalid JSON format');
-      }
-    });
+  ws.on('message', async (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      await handleMessage(
+        deviceId, 
+        message, 
+        ws, 
+        connectedDevices,
+        broadcastDeviceList // Passando a função como parâmetro
+      );
+    } catch (error) {
+      console.error(`❌ Erro ao processar mensagem de ${deviceId}:`, error);
+      sendError(ws, 'Invalid JSON format');
+    }
+  });
     
     ws.on('close', async (code, reason) => {
       console.log(`🔌 Dispositivo ${deviceId} desconectado - Código: ${code}, Razão: ${reason}`);
@@ -98,8 +106,17 @@ module.exports = function(wss) {
   wss.on('close', () => {
     clearInterval(pingInterval);
   });
-};
+}
 
 function generateDeviceId() {
   return 'device_' + Math.random().toString(36).substr(2, 9);
 }
+
+function getConnectedDevices() {
+  return connectedDevices;
+}
+
+module.exports = {
+  initializeWebSocket,
+  getConnectedDevices: () => connectedDevices
+};

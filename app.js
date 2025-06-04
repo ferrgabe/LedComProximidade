@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 const mongoose = require('mongoose');
 const WebSocket = require('ws');
+const { initializeWebSocket } = require('./controllers/websocketController');
 
 // Configurações
 const config = require('./config/database');
@@ -25,7 +26,8 @@ mongoose.connect(config.MONGODB_URI, {
 
 // Configurar WebSocket
 const wss = new WebSocket.Server({ server, path: config.WS_PATH });
-require('./controllers/websocketController')(wss);
+initializeWebSocket(wss);
+require('./controllers/websocketController').initializeWebSocket(wss);
 
 // Configurar rotas
 app.use('/api/devices', require('./routes/deviceRoutes'));

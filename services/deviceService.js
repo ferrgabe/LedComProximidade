@@ -1,9 +1,9 @@
 const Device = require('../models/Device');
 const LedConfig = require('../models/LedConfig');
 const SensorData = require('../models/SensorData');
-const { broadcastToClients, sendMessage, sendError } = require('../utils/websocketUtils');
+const { broadcastToClients, broadcastDeviceListFn, broadcastDeviceList, sendMessage, sendError } = require('../utils/websocketUtils');
 
-async function handleIdentification(deviceId, message, ws, connectedDevices) {
+async function handleIdentification(deviceId, message, ws, connectedDevices, broadcastDeviceListFn) {
   const device = connectedDevices.get(deviceId);
   device.deviceType = message.device || 'unknown';
   device.mac = message.mac;
@@ -33,9 +33,9 @@ async function handleIdentification(deviceId, message, ws, connectedDevices) {
     timestamp: new Date().toISOString()
   });
   
+  // Chamada corrigida da função broadcast
   broadcastDeviceList(connectedDevices);
 }
-
 async function handleHeartbeat(deviceId, message, connectedDevices) {
   const device = connectedDevices.get(deviceId);
   device.lastHeartbeat = new Date();
@@ -139,7 +139,7 @@ async function handleLedUpdate(deviceId, message, ws) {
   }
 }
 
-async function handleMessage(deviceId, message, ws, connectedDevices) {
+async function handleMessage(deviceId, message, ws, connectedDevices, broadcasDeviceListFn) {
   const device = connectedDevices.get(deviceId);
   if (!device) return;
   
@@ -147,7 +147,7 @@ async function handleMessage(deviceId, message, ws, connectedDevices) {
   
   switch (message.type) {
     case 'identification':
-      await handleIdentification(deviceId, message, ws, connectedDevices);
+      await handleIdentification(deviceId, message, ws, connectedDevices, broadcastDeviceListFn);
       break;
     case 'heartbeat':
       await handleHeartbeat(deviceId, message, connectedDevices);
