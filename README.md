@@ -1,13 +1,3 @@
 # LedComProximidade
 
-- Separação clara de responsabilidades (MVC)
-
-- Rotas bem organizadas
-
-- Controllers focados em lidar com requisições/respostas
- 
-- Services com a lógica de negócio
-
-- Models para interação com o banco de dados
-
-- Utilitários compartilhados
+A separação de arquivos em pastas não deu certo. Considerar apenas o código do ArduinoNovo.c e do index.js.
