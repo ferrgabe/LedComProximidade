@@ -12,7 +12,9 @@
 // --- Config WiFi & WebSocket ---
 const char* WIFI_SSID     = "ROBERTO";
 const char* WIFI_PASSWORD = "zzzzxxxx";
-const char* WS_HOST       = "192.168.171.56";
+//const char* WIFI_SSID     = "GABRIEL_2.4G";
+//const char* WIFI_PASSWORD = "@Gabriel1980##";
+const char* WS_HOST       = "192.168.0.30";
 const int   WS_PORT       = 8080;
 const char* WS_PATH       = "/ws";
 

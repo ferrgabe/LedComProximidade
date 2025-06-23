@@ -77,14 +77,11 @@ console.log(`📡 WebSocket disponível em ws://localhost:${PORT}${WS_PATH}`);
 // Eventos do WebSocket
 wss.on('connection', async (ws, req) => {
   const clientIP = req.socket.remoteAddress;
-  // const deviceId = generateDeviceId();
-  const deviceId = "1";
   
-  console.log(`🔌 Nova conexão WebSocket de ${clientIP} - ID: ${deviceId}`);
+  console.log(`🔌 Nova conexão WebSocket de ${clientIP}`);
   
   // Armazenar informações do dispositivo
   const deviceInfo = {
-    deviceId: deviceId,
     ws: ws,
     ip: clientIP,
     connectedAt: new Date(),
@@ -92,10 +89,11 @@ wss.on('connection', async (ws, req) => {
     isAlive: true,
     deviceType: 'unknown',
     mac: null,
-    version: null
+    version: null,
+    deviceId: null
   };
   
-  connectedDevices.set(deviceId, deviceInfo);
+  ws.deviceInfo = deviceInfo
   
   // Salvar dispositivo no MongoDB
   try {
@@ -125,46 +123,55 @@ wss.on('connection', async (ws, req) => {
   ws.on('message', async (data) => {
     try {
       const message = JSON.parse(data.toString());
-      await handleMessage(deviceId, message);
+
+      // Se ainda não tem deviceId, estamos na primeira mensagem com o MAC
+      if (!deviceInfo.deviceId && message.type === 'identification' && message.mac) {
+        deviceInfo.mac = message.mac;
+
+        if (message.mac === '50:02:91:C9:6E:D2') {
+          deviceInfo.deviceId = '1';
+        } else {
+          deviceInfo.deviceId = '2';
+        }
+
+        connectedDevices.set(deviceInfo.deviceId, deviceInfo);
+
+        console.log(`✅ Dispositivo registrado: ${deviceInfo.deviceType} | ID: ${deviceInfo.deviceId} | MAC: ${deviceInfo.mac}`);
+      }
+
+      if (!deviceInfo.deviceId) {
+        // Se ainda não identificou o deviceId, recusa outras mensagens
+        sendError(ws, 'Device not identified. Send MAC address first.');
+        return;
+      }
+
+      // Agora chamamos o seu handleMessage normalmente
+      await handleMessage(deviceInfo.deviceId, message);
+
     } catch (error) {
-      console.error(`❌ Erro ao processar mensagem de ${deviceId}:`, error);
+      console.error(`❌ Erro ao processar mensagem de ${deviceInfo.deviceId || 'desconhecido'}:`, error);
       sendError(ws, 'Invalid JSON format');
     }
   });
   
   // Tratar desconexão
   ws.on('close', async (code, reason) => {
-    console.log(`🔌 Dispositivo ${deviceId} desconectado - Código: ${code}, Razão: ${reason}`);
-    
-    // Atualizar status no MongoDB
-    try {
-      await Device.findOneAndUpdate(
-        { deviceId },
-        { isActive: false, lastHeartbeat: new Date() }
-      );
-    } catch (err) {
-      console.error('Erro ao atualizar status do dispositivo:', err);
+    const deviceId = deviceInfo.deviceId;
+    console.log(`🔌 Dispositivo ${deviceId || 'desconhecido'} desconectado - Código: ${code}, Razão: ${reason}`);
+
+    if (deviceId) {
+      connectedDevices.delete(deviceId);
+      try {
+        await Device.findOneAndUpdate(
+          { deviceId },
+          { isActive: false, lastHeartbeat: new Date() }
+        );
+      } catch (err) {
+        console.error('Erro ao atualizar status do dispositivo:', err);
+      }
     }
-    
-    connectedDevices.delete(deviceId);
-    broadcastDeviceList();
   });
-  
-  // Tratar erros
-  ws.on('error', (error) => {
-    console.error(`❌ Erro WebSocket para ${deviceId}:`, error);
   });
-  
-  // Enviar mensagem de boas-vindas
-  sendMessage(ws, {
-    type: 'welcome',
-    deviceId: deviceId,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Atualizar lista de dispositivos para todos os clientes
-  broadcastDeviceList();
-});
 
 // Função para tratar mensagens recebidas
 async function handleMessage(deviceId, message) {
