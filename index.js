@@ -10,7 +10,7 @@ const server = http.createServer(app);
 // Configurações
 const PORT = 8080;
 const WS_PATH = '/ws';
-const MONGODB_URI = 'mongodb://localhost:27017/iot_dashboard'; // Altere para sua URI
+const MONGODB_URI = 'mongodb://localhost:27017/iot_dashboard';
 
 // Conexão com o MongoDB
 mongoose.connect(MONGODB_URI, {
@@ -77,10 +77,10 @@ console.log(`📡 WebSocket disponível em ws://localhost:${PORT}${WS_PATH}`);
 // Eventos do WebSocket
 wss.on('connection', async (ws, req) => {
   const clientIP = req.socket.remoteAddress;
-  
+
   console.log(`🔌 Nova conexão WebSocket de ${clientIP}`);
-  
-  // Armazenar informações do dispositivo
+
+  // Inicializa informações do dispositivo
   const deviceInfo = {
     ws: ws,
     ip: clientIP,
@@ -90,70 +90,85 @@ wss.on('connection', async (ws, req) => {
     deviceType: 'unknown',
     mac: null,
     version: null,
+    deviceIP: null,
     deviceId: null
   };
-  
-  ws.deviceInfo = deviceInfo
-  
-  // Salvar dispositivo no MongoDB
-  try {
-    await Device.findOneAndUpdate(
-      { deviceId },
-      { 
-        deviceId,
-        ip: clientIP,
-        connectedAt: new Date(),
-        lastHeartbeat: new Date(),
-        isActive: true
-      },
-      { upsert: true, new: true }
-    );
-  } catch (err) {
-    console.error('Erro ao salvar dispositivo no MongoDB:', err);
-  }
-  
-  // Configurar ping/pong para manter conexão viva
+
+  ws.deviceInfo = deviceInfo;
+
+  // Configurar ping/pong
   ws.isAlive = true;
   ws.on('pong', () => {
     ws.isAlive = true;
     deviceInfo.lastHeartbeat = new Date();
   });
-  
+
   // Tratar mensagens recebidas
   ws.on('message', async (data) => {
     try {
       const message = JSON.parse(data.toString());
 
-      // Se ainda não tem deviceId, estamos na primeira mensagem com o MAC
       if (!deviceInfo.deviceId && message.type === 'identification' && message.mac) {
+        // Primeira vez recebendo identificação
         deviceInfo.mac = message.mac;
+        deviceInfo.deviceType = message.device || 'unknown';
+        deviceInfo.version = message.version;
+        deviceInfo.deviceIP = message.ip;
 
-        if (message.mac === '50:02:91:C9:6E:D2') {
-          deviceInfo.deviceId = '1';
-        } else {
-          deviceInfo.deviceId = '2';
-        }
+        // Geração do deviceId (exemplo baseado no MAC ou aleatório)
+        deviceInfo.deviceId = message.mac === '50:02:91:C9:6E:D2'
+          ? '1'
+          : generateDeviceId();
 
         connectedDevices.set(deviceInfo.deviceId, deviceInfo);
 
-        console.log(`✅ Dispositivo registrado: ${deviceInfo.deviceType} | ID: ${deviceInfo.deviceId} | MAC: ${deviceInfo.mac}`);
+        // Salvar no MongoDB
+        try {
+          await Device.findOneAndUpdate(
+            { deviceId: deviceInfo.deviceId },
+            {
+              deviceId: deviceInfo.deviceId,
+              deviceType: deviceInfo.deviceType,
+              mac: deviceInfo.mac,
+              version: deviceInfo.version,
+              ip: deviceInfo.ip,
+              deviceIP: deviceInfo.deviceIP,
+              connectedAt: deviceInfo.connectedAt,
+              lastHeartbeat: deviceInfo.lastHeartbeat,
+              isActive: true
+            },
+            { upsert: true, new: true }
+          );
+          console.log(`✅ Dispositivo registrado: ${deviceInfo.deviceType} | ID: ${deviceInfo.deviceId} | MAC: ${deviceInfo.mac}`);
+        } catch (err) {
+          console.error('❌ Erro ao salvar dispositivo no MongoDB:', err);
+        }
+
+        // Enviar ACK
+        sendMessage(ws, {
+          type: 'identification_ack',
+          status: 'confirmed',
+          timestamp: new Date().toISOString()
+        });
+
+        broadcastDeviceList();
+        return;
       }
 
       if (!deviceInfo.deviceId) {
-        // Se ainda não identificou o deviceId, recusa outras mensagens
         sendError(ws, 'Device not identified. Send MAC address first.');
         return;
       }
 
-      // Agora chamamos o seu handleMessage normalmente
+      // Processar mensagem normalmente
       await handleMessage(deviceInfo.deviceId, message);
 
-    } catch (error) {
-      console.error(`❌ Erro ao processar mensagem de ${deviceInfo.deviceId || 'desconhecido'}:`, error);
+    } catch (err) {
+      console.error(`❌ Erro ao processar mensagem:`, err);
       sendError(ws, 'Invalid JSON format');
     }
   });
-  
+
   // Tratar desconexão
   ws.on('close', async (code, reason) => {
     const deviceId = deviceInfo.deviceId;
@@ -167,11 +182,11 @@ wss.on('connection', async (ws, req) => {
           { isActive: false, lastHeartbeat: new Date() }
         );
       } catch (err) {
-        console.error('Erro ao atualizar status do dispositivo:', err);
+        console.error('❌ Erro ao atualizar status do dispositivo:', err);
       }
     }
   });
-  });
+});
 
 // Função para tratar mensagens recebidas
 async function handleMessage(deviceId, message) {
@@ -285,7 +300,6 @@ async function handleLedUpdate(deviceId, message) {
     await ledConfig.save();
     console.log(`✅ Configuração de LED salva para ${deviceId}`);
     
-    // Você pode adicionar aqui a lógica para enviar a confirmação de volta ao dispositivo
     const device = connectedDevices.get(deviceId);
     if (device && device.ws) {
       sendMessage(device.ws, {

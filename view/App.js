@@ -28,7 +28,8 @@ export default function App() {
         behavior: modoSelecionado === 'Fixo' ? 1 :
                   modoSelecionado === 'Pisca' ? 2 :
                   modoSelecionado === 'Sensor' ? 3 :
-                  modoSelecionado === 'Sensor timer' ? 4 : 0
+                  modoSelecionado === 'Sensor timer' ? 4 :
+                  modoSelecionado === 'On move' ? 5 : 0
       }
     };
 
@@ -80,7 +81,7 @@ export default function App() {
       </View>
 
       <View style={styles.modosContainer}>
-        {['Fixo', 'Pisca', 'Sensor', 'Sensor timer'].map((modo) => (
+        {['Fixo', 'Pisca', 'Sensor', 'Sensor timer', 'On move'].map((modo) => (
           <TouchableOpacity
             key={modo}
             style={[
