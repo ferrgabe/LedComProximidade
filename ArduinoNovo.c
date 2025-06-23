@@ -12,8 +12,6 @@
 // --- Config WiFi & WebSocket ---
 const char* WIFI_SSID     = "ROBERTO";
 const char* WIFI_PASSWORD = "zzzzxxxx";
-//const char* WIFI_SSID     = "GABRIEL_2.4G";
-//const char* WIFI_PASSWORD = "@Gabriel1980##";
 const char* WS_HOST       = "192.168.0.30";
 const int   WS_PORT       = 8080;
 const char* WS_PATH       = "/ws";
@@ -21,7 +19,7 @@ const char* WS_PATH       = "/ws";
 // --- Intervals ---
 const unsigned long HEARTBEAT_INTERVAL = 30000;
 const unsigned long SENSOR_INTERVAL    = 200;
-const unsigned long HOLD_INTERVAL      = 5000;
+const unsigned long DEFAULT_HOLD_INTERVAL = 5000;
 const unsigned long BLINK_INTERVAL     = 500;
 
 // --- Estados ---
@@ -32,14 +30,14 @@ bool proxAndHoldActive = false;
 bool proximityActive = false;
 bool proximityRed = false, proximityGreen = false, proximityBlue = false;
 bool toggleActive = false;
-bool toggleLedState = false; // false = apagado, true = aceso
-bool wasClose = false;
+bool toggleLedState = false;
 
 // --- Temporizadores ---
 unsigned long lastBlinkTime = 0;
 unsigned long lastHoldTime = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastSensorRead = 0;
+unsigned long holdInterval = DEFAULT_HOLD_INTERVAL;
 
 // --- Sensor ultrassônico ---
 long distance = 0;
@@ -48,7 +46,6 @@ unsigned long pulseStartTime = 0;
 
 WebSocketsClient webSocket;
 
-// --- Inicialização ---
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -67,28 +64,19 @@ void setup() {
   setupWebSocket();
 }
 
-// --- Loop Principal ---
 void loop() {
   static unsigned long lastWifiCheck = 0;
   webSocket.loop();
   yield();
-  
-  
-  static unsigned long lastYield = 0;
+
   unsigned long now = millis();
-  
-  // Yield a cada 100ms para evitar WDT
-  //if (now - lastYield > 100) {
-  //  yield();
-  //  lastYield = now;
-  //};
-  
+
   if (millis() - lastWifiCheck > 5000) {
     if (WiFi.status() != WL_CONNECTED) {
       Serial.println("WiFi desconectado, tentando reconectar...");
       connectWiFi();
       if (WiFi.status() == WL_CONNECTED) {
-        setupWebSocket(); // Reconfigura WebSocket se WiFi reconectar
+        setupWebSocket();
       }
     }
     lastWifiCheck = millis();
@@ -99,8 +87,9 @@ void loop() {
     lastHeartbeat = now;
   }
 
-  if (holdActive && now - lastHoldTime >= HOLD_INTERVAL) {
+  if (holdActive && now - lastHoldTime >= holdInterval) {
     turnOffLights();
+    holdActive = false; // Para não disparar repetidamente
   }
 
   if (blinkActive && now - lastBlinkTime >= BLINK_INTERVAL) {
@@ -113,15 +102,13 @@ void loop() {
       case 2: turnOnColor(false, false, true); break;
     }
   }
+
   handleDistanceSensor(now);
   checkProximity(now);
 }
 
-// --- Funções de rede ---
 void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    return;
-  }
+  if (WiFi.status() == WL_CONNECTED) return;
 
   Serial.println();
   Serial.print("Conectando ao WiFi: ");
@@ -136,19 +123,17 @@ void connectWiFi() {
     delay(500);
     Serial.print(".");
     tentativas++;
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); // Piscar LED durante tentativa
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println();
-    Serial.println("Conectado com sucesso!");
+    Serial.println("\nConectado com sucesso!");
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-    digitalWrite(LED_BUILTIN, LOW); // LED aceso quando conectado
+    digitalWrite(LED_BUILTIN, LOW);
   } else {
-    Serial.println();
-    Serial.println("Falha na conexão WiFi!");
-    digitalWrite(LED_BUILTIN, HIGH); // LED apagado quando falha
+    Serial.println("\nFalha na conexão WiFi!");
+    digitalWrite(LED_BUILTIN, HIGH);
   }
 }
 
@@ -159,48 +144,48 @@ void setupWebSocket() {
   Serial.println("WebSocket configurado");
 }
 
-// --- Sensor ultrassônico ---
 void handleDistanceSensor(unsigned long now) {
   if (now - lastSensorRead >= SENSOR_INTERVAL) {
     lastSensorRead = now;
-    
+
     if (!measuringDistance) {
-      // Inicia a medição
       digitalWrite(TRIG_PIN, HIGH);
       pulseStartTime = micros();
       measuringDistance = true;
     } else {
-      // Finaliza o pulso após 10μs
       if (micros() - pulseStartTime >= 10) {
         digitalWrite(TRIG_PIN, LOW);
         measuringDistance = false;
-        
-        // Usar pulseIn com timeout mais curto
-        unsigned long duration = pulseIn(ECHO_PIN, HIGH, 25000); // 25ms timeout
-        distance = duration ? (duration / 2) / 29.1 : 999; // Valor alto se timeout
+
+        unsigned long duration = pulseIn(ECHO_PIN, HIGH, 25000);
+        distance = duration ? (duration / 2) / 29.1 : 999;
       }
     }
   }
 }
 
-// --- Proximidade ---
 void checkProximity(unsigned long now) {
+  static bool wasClose = false;
+
   if (proximityActive && distance <= 30) {
     turnOnColor(proximityRed, proximityGreen, proximityBlue);
   } else if (proxAndHoldActive && distance <= 30) {
     turnOnColor(proximityRed, proximityGreen, proximityBlue);
     lastHoldTime = now;
+    holdActive = true;
   } else if (proximityActive && distance > 30) {
     turnOffLights();
   }
 
-  // Novo comportamento: toggle com proximidade
   if (toggleActive) {
     if (distance <= 30 && !wasClose) {
       wasClose = true;
-      toggleLedState = !toggleLedState; // Inverte o estado
+      toggleLedState = !toggleLedState;
+      Serial.print("TOGGLE acionado! Novo estado: ");
+      Serial.println(toggleLedState ? "ON" : "OFF");
+
       if (toggleLedState) {
-        turnOnColor(proximityRed, proximityGreen, proximityBlue); // Por exemplo: LED vermelho
+        turnOnColor(proximityRed, proximityGreen, proximityBlue);
       } else {
         turnOffLights();
       }
@@ -210,9 +195,10 @@ void checkProximity(unsigned long now) {
   }
 }
 
-// --- LED Control ---
 void turnOnColor(bool red, bool green, bool blue) {
-  digitalWrite(LED_RED, red); digitalWrite(LED_GREEN, green); digitalWrite(LED_BLUE, blue);
+  digitalWrite(LED_RED, red);
+  digitalWrite(LED_GREEN, green);
+  digitalWrite(LED_BLUE, blue);
 }
 
 void turnOffLights() {
@@ -220,49 +206,74 @@ void turnOffLights() {
 }
 
 void stopAllBehaviors() {
-  blinkActive = false; holdActive = false; proxAndHoldActive = false; proximityActive = false; toggleActive = false;
+  blinkActive = false;
+  holdActive = false;
+  proxAndHoldActive = false;
+  proximityActive = false;
+  toggleActive = false;
   turnOffLights();
 }
 
-// --- Comportamentos ---
 void handleBehavior(JsonObject params) {
   bool on = params["on"];
   bool r = params["red"], g = params["green"], b = params["blue"];
   int behavior = params["behavior"];
   stopAllBehaviors();
 
+  holdInterval = DEFAULT_HOLD_INTERVAL; // Reset para padrão
+
   if (!on) return;
 
   switch (behavior) {
-    case 1: turnOnColor(r, g, b); break;
-    case 2: blinkActive = true; lastBlinkTime = millis(); break;
-    case 3: proximityActive = true; proximityRed = r; proximityGreen = g; proximityBlue = b; break;
+    case 1:
+      turnOnColor(r, g, b);
+      break;
+    case 2:
+      blinkActive = true;
+      lastBlinkTime = millis();
+      break;
+    case 3:
+      proximityActive = true;
+      proximityRed = r; proximityGreen = g; proximityBlue = b;
+      break;
     case 4:
-      proxAndHoldActive = true; holdActive = true;
+      proxAndHoldActive = true;
+      holdActive = true;
       proximityRed = r; proximityGreen = g; proximityBlue = b;
       lastHoldTime = millis();
-      break;
-    default: break;
-    case 5:   
-      toggleActive = true;
-      proximityRed = r; 
-      proximityGreen = g; 
-      proximityBlue = b;
-      break;
-      }
-}
 
-// --- WebSocket Eventos ---
-void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
-  switch (type) {
-    case WStype_CONNECTED: isConnected = true; sendIdentification(); break;
-    case WStype_DISCONNECTED: isConnected = false; break;
-    case WStype_TEXT: handleMessage((char*)payload); break;
-    default: break;
+      if (params.containsKey("time")) {
+        holdInterval = params["time"];
+        Serial.print("Sensor timer recebido (ms): ");
+        Serial.println(holdInterval);
+      }
+      break;
+    case 5:
+      toggleActive = true;
+      proximityRed = r; proximityGreen = g; proximityBlue = b;
+      break;
+    default:
+      break;
   }
 }
 
-// --- Comandos JSON ---
+void webSocketEvent(WStype_t type, uint8_t *payload, size_t length) {
+  switch (type) {
+    case WStype_CONNECTED:
+      isConnected = true;
+      sendIdentification();
+      break;
+    case WStype_DISCONNECTED:
+      isConnected = false;
+      break;
+    case WStype_TEXT:
+      handleMessage((char*)payload);
+      break;
+    default:
+      break;
+  }
+}
+
 void handleMessage(const String& message) {
   DynamicJsonDocument doc(1024);
   DeserializationError err = deserializeJson(doc, message);
@@ -282,7 +293,6 @@ void handleMessage(const String& message) {
   }
 }
 
-// --- Envio de mensagens ---
 void sendIdentification() {
   DynamicJsonDocument doc(512);
   doc["type"] = "identification";
@@ -292,7 +302,8 @@ void sendIdentification() {
   doc["ip"] = WiFi.localIP().toString();
   doc["version"] = "1.0.0";
 
-  String msg; serializeJson(doc, msg);
+  String msg;
+  serializeJson(doc, msg);
   webSocket.sendTXT(msg);
 }
 
@@ -302,7 +313,8 @@ void sendHeartbeat() {
   doc["timestamp"] = millis();
   doc["uptime"] = millis() / 1000;
 
-  String msg; serializeJson(doc, msg);
+  String msg;
+  serializeJson(doc, msg);
   webSocket.sendTXT(msg);
 }
 
@@ -313,7 +325,8 @@ void sendStatus() {
   doc["free_heap"] = ESP.getFreeHeap();
   doc["uptime"] = millis() / 1000;
 
-  String msg; serializeJson(doc, msg);
+  String msg;
+  serializeJson(doc, msg);
   webSocket.sendTXT(msg);
 }
 
@@ -322,6 +335,7 @@ void sendSimple(const char* type) {
   doc["type"] = type;
   doc["timestamp"] = millis();
 
-  String msg; serializeJson(doc, msg);
+  String msg;
+  serializeJson(doc, msg);
   webSocket.sendTXT(msg);
 }

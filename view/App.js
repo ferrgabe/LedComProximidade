@@ -39,7 +39,7 @@ export default function App() {
 
     // Adiciona o tempo se for modo Sensor timer
     if (behaviorCode === 4 && tempoSensor) {
-      jsonParaEnviar.parameters.time = parseInt(tempoSensor); 
+      jsonParaEnviar.parameters.time = parseInt(tempoSensor) * 1000; 
     }
 
     console.log("Enviando JSON:", jsonParaEnviar);
@@ -107,13 +107,13 @@ export default function App() {
       {/* Exibe o campo de tempo quando Sensor timer estiver selecionado */}
       {modoSelecionado === 'Sensor timer' && (
         <View style={{ width: '100%', marginBottom: 20 }}>
-          <Text style={{ marginBottom: 8 }}>Tempo do timer (ms):</Text>
+          <Text style={{ marginBottom: 8 }}>Tempo do timer (segundos):</Text>
           <TextInput
             style={styles.input}
             value={tempoSensor}
             onChangeText={setTempoSensor}
             keyboardType="numeric"
-            placeholder="Ex: 5000"
+            placeholder="Ex: 5"
           />
         </View>
       )}
