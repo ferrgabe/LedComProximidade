@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, TextInput } from 'react-native';
 
 const IP_LOCAL = '192.168.0.30:8080';
-const deviceId = '1'
+const deviceId = '1';
 
 export default function App() {
-
   const [coresSelecionadas, setCoresSelecionadas] = useState([]);
   const [modoSelecionado, setModoSelecionado] = useState(null);
+  const [tempoSensor, setTempoSensor] = useState(''); // Novo estado para o tempo
 
   const toggleCor = (cor) => {
     if (coresSelecionadas.includes(cor)) {
@@ -18,6 +18,14 @@ export default function App() {
   };
 
   const enviarComando = async () => {
+    const behaviorCode =
+      modoSelecionado === 'Fixo' ? 1 :
+      modoSelecionado === 'Pisca' ? 2 :
+      modoSelecionado === 'Sensor' ? 3 :
+      modoSelecionado === 'Sensor timer' ? 4 :
+      modoSelecionado === 'On move' ? 5 : 0;
+
+    // Monta o objeto
     const jsonParaEnviar = {
       command: "led_update",
       parameters: {
@@ -25,18 +33,19 @@ export default function App() {
         red: coresSelecionadas.includes('red'),
         blue: coresSelecionadas.includes('blue'),
         green: coresSelecionadas.includes('green'),
-        behavior: modoSelecionado === 'Fixo' ? 1 :
-                  modoSelecionado === 'Pisca' ? 2 :
-                  modoSelecionado === 'Sensor' ? 3 :
-                  modoSelecionado === 'Sensor timer' ? 4 :
-                  modoSelecionado === 'On move' ? 5 : 0
+        behavior: behaviorCode,
       }
     };
+
+    // Adiciona o tempo se for modo Sensor timer
+    if (behaviorCode === 4 && tempoSensor) {
+      jsonParaEnviar.parameters.time = parseInt(tempoSensor); 
+    }
 
     console.log("Enviando JSON:", jsonParaEnviar);
 
     try {
-      const response = await fetch(`http://${IP_LOCAL}/api/device/1/command`, {
+      const response = await fetch(`http://${IP_LOCAL}/api/device/${deviceId}/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(jsonParaEnviar)
@@ -95,6 +104,20 @@ export default function App() {
         ))}
       </View>
 
+      {/* Exibe o campo de tempo quando Sensor timer estiver selecionado */}
+      {modoSelecionado === 'Sensor timer' && (
+        <View style={{ width: '100%', marginBottom: 20 }}>
+          <Text style={{ marginBottom: 8 }}>Tempo do timer (ms):</Text>
+          <TextInput
+            style={styles.input}
+            value={tempoSensor}
+            onChangeText={setTempoSensor}
+            keyboardType="numeric"
+            placeholder="Ex: 5000"
+          />
+        </View>
+      )}
+
       <TouchableOpacity style={styles.botaoIniciar} onPress={enviarComando}>
         <Text style={styles.textoIniciar}>INICIAR</Text>
       </TouchableOpacity>
@@ -113,22 +136,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 24,
-  },
-  coresContainer: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 32,
-  },
-  botaoCor: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    opacity: 0.5,
-  },
-  botaoCorSelecionado: {
-    borderWidth: 3,
-    borderColor: '#000',
-    opacity: 1,
   },
   modosContainer: {
     width: '100%',
@@ -160,4 +167,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fff'
+  }
 });

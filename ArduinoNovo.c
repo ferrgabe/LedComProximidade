@@ -31,6 +31,9 @@ bool holdActive = false;
 bool proxAndHoldActive = false;
 bool proximityActive = false;
 bool proximityRed = false, proximityGreen = false, proximityBlue = false;
+bool toggleActive = false;
+bool toggleLedState = false; // false = apagado, true = aceso
+bool wasClose = false;
 
 // --- Temporizadores ---
 unsigned long lastBlinkTime = 0;
@@ -190,6 +193,21 @@ void checkProximity(unsigned long now) {
   } else if (proximityActive && distance > 30) {
     turnOffLights();
   }
+
+  // Novo comportamento: toggle com proximidade
+  if (toggleActive) {
+    if (distance <= 30 && !wasClose) {
+      wasClose = true;
+      toggleLedState = !toggleLedState; // Inverte o estado
+      if (toggleLedState) {
+        turnOnColor(proximityRed, proximityGreen, proximityBlue); // Por exemplo: LED vermelho
+      } else {
+        turnOffLights();
+      }
+    } else if (distance > 30) {
+      wasClose = false;
+    }
+  }
 }
 
 // --- LED Control ---
@@ -202,7 +220,7 @@ void turnOffLights() {
 }
 
 void stopAllBehaviors() {
-  blinkActive = false; holdActive = false; proxAndHoldActive = false; proximityActive = false;
+  blinkActive = false; holdActive = false; proxAndHoldActive = false; proximityActive = false; toggleActive = false;
   turnOffLights();
 }
 
@@ -225,7 +243,13 @@ void handleBehavior(JsonObject params) {
       lastHoldTime = millis();
       break;
     default: break;
-  }
+    case 5:   
+      toggleActive = true;
+      proximityRed = r; 
+      proximityGreen = g; 
+      proximityBlue = b;
+      break;
+      }
 }
 
 // --- WebSocket Eventos ---
