@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, TextInput } from 'react-native';
 
-const IP_LOCAL = '192.168.0.30:8080';
+const IP_LOCAL = '192.168.225.56:8080';
 const deviceId = '1';
 
 export default function App() {

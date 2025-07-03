@@ -10,15 +10,28 @@ const server = http.createServer(app);
 // Configurações
 const PORT = 8080;
 const WS_PATH = '/ws';
-const MONGODB_URI = 'mongodb://localhost:27017/iot_dashboard';
+const MONGODB_URI = 'mongodb://127.0.0.1:27017/iot_dashboard';
 
 // Conexão com o MongoDB
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+mongoose.connect(MONGODB_URI)
+//mongoose.connect(MONGODB_URI, {
+//  useNewUrlParser: true,
+//  useUnifiedTopology: true
+//})
+.then(() => {
+  console.log('✅ Conectado ao MongoDB');
+
+// Iniciar servidor
+server.listen(PORT, () => {
+  console.log(`✅ Servidor rodando na porta ${PORT}`);
+  console.log(`🌐 Dashboard: http://localhost:${PORT}`);
+  console.log(`📡 WebSocket: ws://localhost:${PORT}${WS_PATH}`);
+});
 })
-.then(() => console.log('✅ Conectado ao MongoDB'))
-.catch(err => console.error('❌ Erro na conexão MongoDB:', err));
+
+.catch(err => {
+  console.error('❌ Erro na conexão MongoDB:', err)
+});
 
 // Definir schemas do MongoDB
 const DeviceSchema = new mongoose.Schema({
@@ -605,11 +618,4 @@ const pingInterval = setInterval(() => {
 // Limpeza ao encerrar
 wss.on('close', () => {
   clearInterval(pingInterval);
-});
-
-// Iniciar servidor
-server.listen(PORT, () => {
-  console.log(`✅ Servidor rodando na porta ${PORT}`);
-  console.log(`🌐 Dashboard: http://localhost:${PORT}`);
-  console.log(`📡 WebSocket: ws://localhost:${PORT}${WS_PATH}`);
 });
